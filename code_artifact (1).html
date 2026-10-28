@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>科学篮球大作战 (Basketball Science Challenge)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Teko:wght@600;700&family=Noto+Sans+SC:wght@500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            background-color: #0d1117;
+            color: #ffffff;
+            overflow: hidden;
+        }
+        .font-teko {
+            font-family: 'Teko', sans-serif;
+        }
+        /* Custom Arcade Glows & Shadows */
+        .text-glow-orange {
+            text-shadow: 0 0 10px rgba(249, 115, 22, 0.8), 0 0 20px rgba(249, 115, 22, 0.5);
+        }
+        .text-glow-cyan {
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.8), 0 0 20px rgba(6, 182, 212, 0.5);
+        }
+        .box-glow {
+            box-shadow: 0 0 25px rgba(249, 115, 22, 0.3);
+        }
+        /* Basketball Styling */
+        .basketball {
+            background: radial-gradient(circle at 35% 35%, #ff8833, #e65c00 60%, #993d00);
+            border-radius: 50%;
+            box-shadow: inset -4px -4px 10px rgba(0,0,0,0.6), inset 3px 3px 6px rgba(255,255,255,0.4), 0 10px 20px rgba(0,0,0,0.4);
+            position: relative;
+            cursor: grab;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .basketball:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+        /* Basketball Seams */
+        .basketball::before, .basketball::after {
+            content: "";
+            position: absolute;
+            border: 2px solid rgba(20, 20, 20, 0.75);
+            border-radius: 50%;
+        }
+        .basketball::before {
+            top: 0; left: 15%; width: 70%; height: 100%;
+            border-left: none; border-right: none;
+        }
+        .basketball::after {
+            top: 15%; left: 0; width: 100%; height: 70%;
+            border-top: none; border-bottom: none;
+        }
+        .basketball-line-h {
+            position: absolute;
+            top: 50%; left: 0; width: 100%; height: 2px;
+            background-color: rgba(20, 20, 20, 0.75);
+            transform: translateY(-50%);
+        }
+        .basketball-line-v {
+            position: absolute;
+            top: 0; left: 50%; width: 2px; height: 100%;
+            background-color: rgba(20, 20, 20, 0.75);
+            transform: translateX(-50%);
+        }
+        /* Animations */
+        @keyframes pulse-subtle {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+        .animate-pulse-subtle {
+            animation: pulse-subtle 2s infinite ease-in-out;
+        }
+        @keyframes net-swish {
+            0% { transform: scaleY(1) skewX(0); }
+            30% { transform: scaleY(1.3) skewX(10deg); }
+            60% { transform: scaleY(0.8) skewX(-5deg); }
+            100% { transform: scaleY(1) skewX(0); }
+        }
+        .swish-anim {
+            animation: net-swish 0.5s ease-out;
+            transform-origin: top center;
+        }
+        /* Glassmorphism modal */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between select-none overflow-hidden relative">
+
+    <!-- Canvas for Flying Basketballs & Particle Effects -->
+    <canvas id="gameCanvas" class="absolute inset-0 pointer-events-none z-20"></canvas>
+
+    <!-- Header HUD Zone -->
+    <header class="relative z-10 w-full px-4 pt-3 pb-2 flex justify-between items-center glass-panel border-b border-orange-500/30">
+        <!-- Title / Grade Info -->
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-orange-600 to-amber-400 flex items-center justify-center text-white text-xl font-black shadow-lg shadow-orange-500/30">
+                <i class="fa-solid font-bold fa-basketball"></i>
+            </div>
+            <div>
+                <h1 class="text-lg md:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400 tracking-wide">
+                    一年级科学篮球大作战
+                </h1>
+                <p class="text-xs text-slate-400 hidden sm:block">小学一年级科学全册总复习 (30题)</p>
+            </div>
+        </div>
+
+        <!-- Score & Accuracy Stats -->
+        <div class="flex items-center space-x-4 md:space-x-8">
+            <!-- Question Counter -->
+            <div class="text-center">
+                <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">进度 Progress</div>
+                <div class="text-xl md:text-2xl font-teko font-bold text-cyan-400 leading-none">
+                    <span id="currentQNum">1</span><span class="text-slate-500 text-sm">/30</span>
+                </div>
+            </div>
+
+            <!-- Score Display -->
+            <div class="text-center">
+                <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">得分 Score</div>
+                <div id="scoreDisplay" class="text-xl md:text-2xl font-teko font-bold text-amber-400 leading-none text-glow-orange">
+                    0
+                </div>
+            </div>
+
+            <!-- Accuracy Display -->
+            <div class="text-center">
+                <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">命中率 Acc</div>
+                <div id="accuracyDisplay" class="text-xl md:text-2xl font-teko font-bold text-emerald-400 leading-none">
+                    100%
+                </div>
+            </div>
+
+            <!-- Mute Audio Button -->
+            <button id="audioBtn" class="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center justify-center text-slate-300 transition">
+                <i class="fa-solid fa-volume-high" id="audioIcon"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Game Court View -->
+    <main class="relative flex-1 w-full flex flex-col justify-between items-center overflow-hidden">
+
+        <!-- Basketball Court Background Scene (SVG + CSS) -->
+        <div class="absolute inset-0 z-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-between">
+            <!-- Court Wall Light Grid -->
+            <div class="absolute inset-0 opacity-20 bg-[radial-gradient(#f97316_1px,transparent_1px)] [background-size:24px_24px]"></div>
+
+            <!-- Spotlight Effects -->
+            <div class="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl"></div>
+            <div class="absolute top-0 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl"></div>
+
+            <!-- Basketball Hoop Structure (Centered Upper Half) -->
+            <div class="relative mt-4 md:mt-8 w-72 md:w-96 h-56 flex flex-col items-center justify-start">
+                <!-- Backboard Pole -->
+                <div class="absolute -top-10 w-4 h-24 bg-gradient-to-r from-slate-700 via-slate-600 to-slate-800 rounded-sm"></div>
+
+                <!-- Glass Backboard -->
+                <div class="relative w-64 md:w-80 h-40 md:h-48 rounded-lg border-4 border-slate-300/80 bg-slate-900/40 backdrop-blur-sm shadow-2xl flex items-center justify-center border-t-8">
+                    <!-- Outer Edge Line -->
+                    <div class="absolute inset-2 border-2 border-slate-400/50 rounded"></div>
+                    <!-- Inner Target Rectangle -->
+                    <div class="w-24 h-20 border-4 border-orange-500/90 rounded-sm bg-orange-500/10 mb-4"></div>
+                </div>
+
+                <!-- Hoop Rim & Net Assembly -->
+                <div class="relative -mt-8 flex flex-col items-center z-10">
+                    <!-- Rim Connection Bracket -->
+                    <div class="w-8 h-4 bg-red-700 border border-red-900 rounded-sm"></div>
+                    <!-- Iron Rim -->
+                    <div id="basketRim" class="w-28 md:w-32 h-6 border-4 border-orange-600 rounded-full shadow-lg bg-transparent flex items-center justify-center -mt-2 relative">
+                        <!-- Red Rim Highlights -->
+                        <div class="absolute inset-0 rounded-full border border-amber-300 opacity-60"></div>
+                        <!-- White Net (SVG Graphic) -->
+                        <svg id="basketNet" class="w-24 md:w-28 h-24 text-slate-100/80 absolute top-2 transition-transform origin-top" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M5,0 L15,100 M95,0 L85,100 M25,0 L35,100 M75,0 L65,100 M50,0 L50,100" stroke-dasharray="2,2"/>
+                            <path d="M5,0 Q50,20 95,0 M10,25 Q50,45 90,25 M15,50 Q50,70 85,50 M20,75 Q50,90 80,75 M30,100 Q50,105 70,100"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Floor Rim Projection Shadow -->
+                <div id="hoopTargetShadow" class="absolute bottom-[-180px] w-36 h-8 bg-black/40 rounded-full blur-md"></div>
+            </div>
+        </div>
+
+        <!-- Dynamic Question Card Banner -->
+        <div class="relative z-10 w-11/12 max-w-3xl mt-2 px-4 py-3 md:py-4 glass-panel rounded-2xl border-2 border-amber-500/40 shadow-xl flex flex-col items-center animate-pulse-subtle">
+            <div class="flex items-center space-x-2 mb-1">
+                <span id="unitBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 uppercase tracking-wider">
+                    第 1 单元：科学程序技能
+                </span>
+            </div>
+            <h2 id="questionText" class="text-base sm:text-lg md:text-xl font-bold text-center text-slate-100 leading-snug">
+                加载题目中...
+            </h2>
+        </div>
+
+        <!-- Interactive Basketballs Court Area (3 Options) -->
+        <div class="relative z-10 w-full max-w-4xl px-4 mb-4 md:mb-8 flex flex-col items-center">
+            <p class="text-xs text-amber-300/80 mb-3 font-semibold tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-hand-pointer animate-bounce"></i> 提示：可以直接<span class="underline">点击</span>正确答案的篮球自动投篮，或<span class="underline">拖拽</span>抛向篮筐！
+            </p>
+
+            <!-- Basketball Containers Layout -->
+            <div id="optionsContainer" class="w-full grid grid-cols-3 gap-3 sm:gap-6 md:gap-8 justify-items-center items-end min-h-[140px]">
+                <!-- Balls injected dynamically via JavaScript -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal: Start Game Screen -->
+    <div id="startModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+        <div class="max-w-lg w-full glass-panel rounded-3xl p-6 md:p-8 border-2 border-orange-500/50 shadow-2xl text-center flex flex-col items-center">
+            <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-white text-4xl shadow-lg shadow-orange-500/50 mb-4 animate-bounce">
+                <i class="fa-solid fa-basketball"></i>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400 mb-2">
+                科学篮球大作战
+            </h1>
+            <p class="text-sm text-slate-300 mb-6 leading-relaxed">
+                欢迎来到一年级科学总复习球场！这里准备了 <span class="text-amber-400 font-bold">30 道精选题目</span>，涵盖全册 10 个核心单元。<br>
+                认准包含正确答案的篮球，向篮筐射球命中吧！
+            </p>
+
+            <div class="w-full space-y-2 mb-6 text-left text-xs text-slate-300 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                <div class="flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-400"></i> 拖拽或直接点击含有答案的篮球进行投篮</div>
+                <div class="flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-400"></i> 命中空心球获取高分与绚丽音效</div>
+                <div class="flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-400"></i> 挑战 100% 命中率，冲刺科学小巨星勋章</div>
+            </div>
+
+            <button id="startGameBtn" class="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-slate-950 font-black text-lg tracking-wider shadow-lg shadow-orange-500/40 transform active:scale-95 transition">
+                <i class="fa-solid fa-play mr-2"></i> 开始比赛 START
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal: Result / Summary Screen -->
+    <div id="resultModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md hidden">
+        <div class="max-w-xl w-full glass-panel rounded-3xl p-6 md:p-8 border-2 border-amber-500/50 shadow-2xl text-center flex flex-col items-center max-h-[90vh] overflow-y-auto">
+            <div id="badgeIcon" class="w-20 h-20 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-300 flex items-center justify-center text-slate-950 text-4xl shadow-lg shadow-amber-500/50 mb-3">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+
+            <h2 id="resultTitle" class="text-2xl md:text-3xl font-black text-amber-400 mb-1">
+                比赛结束！全能 MVP！
+            </h2>
+            <p id="resultSubtitle" class="text-xs md:text-sm text-slate-300 mb-6">你展现了极其优异的科学知识与投篮技巧！</p>
+
+            <!-- Final Stats Grid -->
+            <div class="grid grid-cols-3 gap-3 w-full mb-6">
+                <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
+                    <div class="text-[10px] text-slate-400 uppercase font-bold">总得分</div>
+                    <div id="finalScore" class="text-2xl font-teko font-bold text-amber-400">0</div>
+                </div>
+                <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
+                    <div class="text-[10px] text-slate-400 uppercase font-bold">答对题数</div>
+                    <div id="finalCorrect" class="text-2xl font-teko font-bold text-emerald-400">0 / 30</div>
+                </div>
+                <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
+                    <div class="text-[10px] text-slate-400 uppercase font-bold">最终命中率</div>
+                    <div id="finalAccuracy" class="text-2xl font-teko font-bold text-cyan-400">0%</div>
+                </div>
+            </div>
+
+            <!-- Quiz Breakdown Accordion/List -->
+            <div class="w-full text-left mb-6">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">复习回顾 (全 30 题解析)</h3>
+                <div id="reviewList" class="space-y-2 max-h-48 overflow-y-auto pr-1 text-xs">
+                    <!-- Dynamic review items inserted here -->
+                </div>
+            </div>
+
+            <button id="restartGameBtn" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-black text-base tracking-wider shadow-lg shadow-orange-500/30 transform active:scale-95 transition">
+                <i class="fa-solid fa-rotate-right mr-2"></i> 再挑战一次 REPLAY
+            </button>
+        </div>
+    </div>
+
+    <!-- Feedback Toast Popup -->
+    <div id="feedbackToast" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-40 px-6 py-2.5 rounded-full glass-panel border border-amber-500/50 text-white font-bold text-sm shadow-2xl opacity-0 transition-all duration-300 pointer-events-none flex items-center space-x-2">
+        <i id="feedbackIcon" class="fa-solid fa-star text-amber-400"></i>
+        <span id="feedbackText">精彩投篮！</span>
+    </div>
+
+    <!-- JavaScript Game Engine Core Logic -->
+    <script>
+        /* ===================================================================
+           1. QUESTION BANK: 30 Questions across 10 Year-1 Science Units
+           =================================================================== */
+        const questionBank = [
+            // Unit 1: 科学程序技能
+            { unit: "第 1 单元：科学程序技能", question: "用眼睛看、用耳朵听、用手摸来了解事物，这是在使用哪种技能？", options: ["观察", "分类", "测量"], answer: 0, detail: "观察是指利用视觉、听觉、触觉、味觉和嗅觉来收集有关事物的信息。" },
+            { unit: "第 1 单元：科学程序技能", question: "把形状相同的按钮放在一起，这是使用了什么科学技能？", options: ["测量", "分类", "推断"], answer: 1, detail: "分类是根据物体的共同特征或规律进行分组。" },
+            { unit: "第 1 单元：科学程序技能", question: "实验结束后，我们应该怎样处理用过的科学用具？", options: ["随意丢弃", "清洗干净并放回原位", "放在桌上不管"], answer: 1, detail: "正确操纵科学用具包括用后清洗干净并安全收存。" },
+
+            // Unit 2: 科学室规则
+            { unit: "第 2 单元：科学室规则", question: "进入科学室前，我们应该先做什么？", options: ["直接冲进去", "获得老师许可后排队进入", "在里面吃东西"], answer: 1, detail: "进入科学室前必须获得老师的许可并在老师带领下排队进入。" },
+            { unit: "第 2 单元：科学室规则", question: "如果在科学室里不小心打破了玻璃仪器，应该怎么做？", options: ["藏起来不说话", "立刻报告老师", "用手去捡碎玻璃"], answer: 1, detail: "发生意外或损坏器材时，必须第一时间报告老师处理。" },
+
+            // Unit 3: 生物和非生物
+            { unit: "第 3 单元：生物和非生物", question: "下列哪项属于生物的特征？", options: ["不需要食物", "会繁殖和生长", "永远不会移动"], answer: 1, detail: "生物需要呼吸、水和食物，并且会生长、繁殖和移动。" },
+            { unit: "第 3 单元：生物和非生物", question: "下列哪一个是生物？", options: ["玩具熊", "小猫", "汽车"], answer: 1, detail: "小猫有生命、会生长和繁殖，属于生物。" },
+            { unit: "第 3 单元：生物和非生物", question: "为什么植物是生物，而石头不是？", options: ["植物需要水和阳光生长", "石头会变大", "石头需要呼吸"], answer: 0, detail: "植物需要水、阳光和空气来维持生命并生长，因此是生物。" },
+
+            // Unit 4: 感觉器官
+            { unit: "第 4 单元：感觉器官", question: "我们用哪种感觉器官来辨别物体的颜色和形状？", options: ["耳朵", "眼睛", "鼻子"], answer: 1, detail: "视觉器官是眼睛，用来观察颜色、形状和大小。" },
+            { unit: "第 4 单元：感觉器官", question: "尝一尝红豆冰是甜的，这是使用了哪种感觉器官？", options: ["舌头", "皮肤", "耳朵"], answer: 0, detail: "舌头是味觉器官，能尝出酸、甜、苦、咸等味道。" },
+            { unit: "第 4 单元：感觉器官", question: "摸起来感觉热水壶很烫，这是通过什么器官感受到的？", options: ["眼睛", "皮肤", "鼻子"], answer: 1, detail: "皮肤是触觉器官，能感受冷、热、粗糙、平滑等。" },
+
+            // Unit 5: 动物
+            { unit: "第 5 单元：动物", question: "鱼类靠什么身体部位在水中呼吸？", options: ["肺", "鳃", "翅膀"], answer: 1, detail: "大部分鱼类利用鳃呼吸水中的溶解氧。" },
+            { unit: "第 5 单元：动物", question: "鸟类身体表面覆盖着什么？", options: ["鳞片", "羽毛", "硬壳"], answer: 1, detail: "鸟类的身体表面覆盖着羽毛，帮助保温和飞行。" },
+            { unit: "第 5 单元：动物", question: "青蛙和乌龟都有什么共同外形特征或生存习性？", options: ["都有翅膀", "能生活在水里和陆地上", "身体都有外壳"], answer: 1, detail: "青蛙和乌龟属于可在陆地与水域活动或生存的动物。" },
+
+            // Unit 6: 植物
+            { unit: "第 6 单元：植物", question: "植物的哪个部分主要负责吸收水分和养分？", options: ["叶片", "花朵", "根"], answer: 2, detail: "植物的根深入土壤，主要功能是吸收水分和无机盐养分并固定植物。" },
+            { unit: "第 6 单元：植物", question: "下列哪种植物具有网状叶脉？", options: ["凤仙花/大红花", "水稻", "玉米"], answer: 0, detail: "双子叶植物（如大红花、凤仙花）通常具有网状叶脉。" },
+            { unit: "第 6 单元：植物", question: "植物的茎主要有什么作用？", options: ["吸收阳光", "输送水分和养分", "吸收土壤养分"], answer: 1, detail: "茎连接根与叶，起到支撑植物体以及输送水分和养分的作用。" },
+
+            // Unit 7: 磁铁
+            { unit: "第 7 单元：磁铁", question: "磁铁能够吸引下列哪种材料制成的物品？", options: ["塑料", "铁", "木头"], answer: 1, detail: "磁铁能吸引铁、镍、钴等磁性金属制品。" },
+            { unit: "第 7 单元：磁铁", question: "当两块磁铁的“同极”（如 N极 与 N极）互相靠近时，会发生什么现象？", options: ["互相吸引", "互相排斥（推开）", "没有任何反应"], answer: 1, detail: "磁铁的规律是：同极相斥，异极相吸。" },
+            { unit: "第 7 单元：磁铁", question: "下列哪种形状不属于常见的磁铁形状？", options: ["条形磁铁", "U形磁铁", "三角形磁铁"], answer: 2, detail: "常见磁铁形状有条形、U形（蹄形）、环形、圆形和纽扣形等。" },
+
+            // Unit 8: 吸水能力
+            { unit: "第 8 单元：吸水能力", question: "下列哪种材料具有良好的吸水能力？", options: ["棉布", "塑料袋", "玻璃杯"], answer: 0, detail: "棉布、海绵、面巾纸等材料具有良好的吸水能力。" },
+            { unit: "第 8 单元：吸水能力", question: "下雨天穿雨衣可以挡雨，是因为雨衣的材料是？", options: ["吸水的", "不吸水的", "易碎的"], answer: 1, detail: "雨衣通常由塑料或防水布做成，属于不吸水材料。" },
+            { unit: "第 8 单元：吸水能力", question: "打翻水杯后，用哪种物品能最快把桌上的水吸干？", options: ["塑料尺", "海绵", "铁匙羹"], answer: 1, detail: "海绵内部含有许多微孔，吸水能力极强。" },
+
+            // Unit 9: 陆地与水域
+            { unit: "第 9 单元：陆地与水域", question: "地球表面覆盖面积最大的是什么？", options: ["陆地", "海洋（水域）", "沙漠"], answer: 1, detail: "地球表面约 71% 是海洋与水域。" },
+            { unit: "第 9 单元：陆地与水域", question: "下列哪种土壤最适合用来种植花草植物？", options: ["沙土", "壤土", "黏土"], answer: 1, detail: "壤土含有适量的腐殖质、保水性和透气性好，最适合大多数植物生长。" },
+            { unit: "第 9 单元：陆地与水域", question: "捏泥人或制作陶器通常使用哪种土壤？", options: ["黏土", "沙土", "花园土"], answer: 0, detail: "黏土颗粒极细、黏性强，最适合造型和做陶器。" },
+
+            // Unit 10: 建筑套件
+            { unit: "第 1 0 单元：建筑套件", question: "利用建筑套件组装模型时，第一步应该做什么？", options: ["随便乱装", "阅读说明手册", "把组件丢掉"], answer: 1, detail: "组装模型前应阅读说明手册，了解步骤与组件。" },
+            { unit: "第 1 0 单元：建筑套件", question: "房子的屋顶通常设计成什么形状以利于排水？", options: ["圆形", "三角形/斜面", "正方形"], answer: 1, detail: "三角形或斜面屋顶有利于雨水快速顺流倾泻。" },
+            { unit: "第 1 0 单元：建筑套件", question: "拆卸建筑套件时，正确的做法是？", options: ["用力砸开", "按顺序拆卸并整齐存放到盒子里", "丢到垃圾桶"], answer: 1, detail: "爱护教具需要依序拆卸并整齐妥善收纳。" },
+            { unit: "第 1 0 单元：建筑套件", question: "下列哪种基本形状具有最高的稳定性，常用于桥梁搭建？", options: ["圆柱形", "三角形/三棱柱", "五角形"], answer: 1, detail: "三角形具有结构稳定性，在建筑工程中被广泛采用。" }
+        ];
+
+        /* ===================================================================
+           2. SOUND ENGINE: Native Web Audio API Sound Synthesizer
+           =================================================================== */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playSwish() {
+                if (this.muted) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                // White noise for net swish sound
+                const bufferSize = this.ctx.sampleRate * 0.3;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const output = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(1000, now);
+                filter.Q.setValueAtTime(1.5, now);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.6, now + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                noise.start(now);
+            }
+
+            playRimHit() {
+                if (this.muted) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                // Metal clank / rim bounce
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.2);
+
+                gain.gain.setValueAtTime(0.8, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.2);
+            }
+
+            playCheer() {
+                if (this.muted) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                // Arpeggio chord for success
+                const freqs = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                freqs.forEach((f, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, now + i * 0.08);
+
+                    gain.gain.setValueAtTime(0.3, now + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.4);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now + i * 0.08);
+                    osc.stop(now + i * 0.08 + 0.4);
+                });
+            }
+
+            playBounce() {
+                if (this.muted) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(120, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.12);
+
+                gain.gain.setValueAtTime(0.5, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.12);
+            }
+        }
+
+        const audio = new SoundEngine();
+
+        /* ===================================================================
+           3. GAME STATE MANAGEMENT
+           =================================================================== */
+        let state = {
+            currentIndex: 0,
+            score: 0,
+            correctCount: 0,
+            totalAttempted: 0,
+            userAnswers: [],
+            isAnimating: false,
+            activeQuestions: []
+        };
+
+        // DOM elements
+        const gameCanvas = document.getElementById('gameCanvas');
+        const ctx = gameCanvas.getContext('2d');
+        const startModal = document.getElementById('startModal');
+        const resultModal = document.getElementById('resultModal');
+        const optionsContainer = document.getElementById('optionsContainer');
+        const currentQNum = document.getElementById('currentQNum');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const accuracyDisplay = document.getElementById('accuracyDisplay');
+        const questionText = document.getElementById('questionText');
+        const unitBadge = document.getElementById('unitBadge');
+        const feedbackToast = document.getElementById('feedbackToast');
+        const feedbackText = document.getElementById('feedbackText');
+        const feedbackIcon = document.getElementById('feedbackIcon');
+        const basketNet = document.getElementById('basketNet');
+
+        /* Resize Canvas dynamically */
+        function resizeCanvas() {
+            gameCanvas.width = window.innerWidth;
+            gameCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        /* Shuffle Array */
+        function shuffle(array) {
+            return [...array].sort(() => Math.random() - 0.5);
+        }
+
+        /* Initialize Game */
+        function initGame() {
+            state.currentIndex = 0;
+            state.score = 0;
+            state.correctCount = 0;
+            state.totalAttempted = 0;
+            state.userAnswers = [];
+            state.isAnimating = false;
+
+            // Shuffle full set of 30 questions
+            state.activeQuestions = shuffle([...questionBank]);
+            
+            updateHUD();
+            loadQuestion();
+
+            startModal.classList.add('hidden');
+            resultModal.classList.add('hidden');
+        }
+
+        /* Update HUD Info */
+        function updateHUD() {
+            currentQNum.textContent = state.currentIndex + 1;
+            scoreDisplay.textContent = state.score;
+            const acc = state.totalAttempted === 0 ? 100 : Math.round((state.correctCount / state.totalAttempted) * 100);
+            accuracyDisplay.textContent = `${acc}%`;
+        }
+
+        /* Render Current Question & Basketball Options */
+        function loadQuestion() {
+            if (state.currentIndex >= state.activeQuestions.length) {
+                showFinalResults();
+                return;
+            }
+
+            const q = state.activeQuestions[state.currentIndex];
+            unitBadge.textContent = q.unit;
+            questionText.textContent = q.question;
+
+            optionsContainer.innerHTML = '';
+            state.isAnimating = false;
+
+            q.options.forEach((optText, idx) => {
+                const optionWrap = document.createElement('div');
+                optionWrap.className = "flex flex-col items-center group cursor-pointer w-full";
+
+                // Basketball DOM Element
+                const ball = document.createElement('div');
+                ball.className = "basketball w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 flex items-center justify-center p-2 text-center text-xs sm:text-sm font-bold text-slate-900 leading-snug drop-shadow-xl select-none";
+                ball.dataset.index = idx;
+
+                // Basketball seam details
+                const lineH = document.createElement('div');
+                lineH.className = "basketball-line-h";
+                const lineV = document.createElement('div');
+                lineV.className = "basketball-line-v";
+                
+                // Label text on ball
+                const label = document.createElement('span');
+                label.className = "relative z-10 bg-amber-100/90 text-slate-950 px-2 py-1 rounded-md shadow-md text-[11px] sm:text-xs font-black max-w-[90%] break-words";
+                label.textContent = optText;
+
+                ball.appendChild(lineH);
+                ball.appendChild(lineV);
+                ball.appendChild(label);
+
+                optionWrap.appendChild(ball);
+                optionsContainer.appendChild(optionWrap);
+
+                // Setup Click & Drag Interaction
+                setupBallInteractions(ball, idx);
+            });
+
+            updateHUD();
+        }
+
+        /* Setup Interactive Drag & Click Mechanics */
+        function setupBallInteractions(ball, optIndex) {
+            let isDragging = false;
+            let startX = 0, startY = 0;
+            let currentX = 0, currentY = 0;
+
+            // Click Handler for Auto-Shot
+            ball.addEventListener('click', (e) => {
+                if (state.isAnimating || isDragging) return;
+                shootBallAnimation(ball, optIndex);
+            });
+
+            // Touch & Mouse Drag Handlers
+            const startDrag = (e) => {
+                if (state.isAnimating) return;
+                isDragging = false;
+                const point = e.touches ? e.touches[0] : e;
+                startX = point.clientX;
+                startY = point.clientY;
+
+                const onMove = (moveEvt) => {
+                    const movePoint = moveEvt.touches ? moveEvt.touches[0] : moveEvt;
+                    const dx = movePoint.clientX - startX;
+                    const dy = movePoint.clientY - startY;
+
+                    if (Math.hypot(dx, dy) > 10) {
+                        isDragging = true;
+                        ball.style.transform = `translate(${dx}px, ${dy}px) scale(1.05)`;
+                    }
+                };
+
+                const onEnd = (endEvt) => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onEnd);
+                    document.removeEventListener('touchmove', onMove);
+                    document.removeEventListener('touchend', onEnd);
+
+                    if (isDragging) {
+                        ball.style.transform = '';
+                        // If dragged upwards significantly, trigger shot
+                        const endPoint = endEvt.changedTouches ? endEvt.changedTouches[0] : endEvt;
+                        const dy = endPoint.clientY - startY;
+                        if (dy < -50) {
+                            shootBallAnimation(ball, optIndex);
+                        }
+                    }
+                };
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onEnd);
+                document.addEventListener('touchmove', onMove, { passive: false });
+                document.addEventListener('touchend', onEnd);
+            };
+
+            ball.addEventListener('mousedown', startDrag);
+            ball.addEventListener('touchstart', startDrag, { passive: true });
+        }
+
+        /* ===================================================================
+           4. BALL FLIGHT & PARTICLE CANVAS ANIMATION SYSTEM
+           =================================================================== */
+        let activeParticles = [];
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8 - 3;
+                this.size = Math.random() * 6 + 3;
+                this.color = color;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.03 + 0.015;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.2; // Gravity
+                this.alpha -= this.decay;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function spawnParticles(x, y, count = 25, color = '#f97316') {
+            for (let i = 0; i < count; i++) {
+                activeParticles.push(new Particle(x, y, color));
+            }
+        }
+
+        function renderParticles() {
+            ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+            for (let i = activeParticles.length - 1; i >= 0; i--) {
+                const p = activeParticles[i];
+                p.update();
+                p.draw(ctx);
+                if (p.alpha <= 0) {
+                    activeParticles.splice(i, 1);
+                }
+            }
+            requestAnimationFrame(renderParticles);
+        }
+        renderParticles();
+
+        /* Ball Throw Trajectory Animation */
+        function shootBallAnimation(ballElement, selectedIndex) {
+            state.isAnimating = true;
+            const q = state.activeQuestions[state.currentIndex];
+            const isCorrect = (selectedIndex === q.answer);
+
+            // Audio bounce on release
+            audio.playBounce();
+
+            // Record Stats
+            state.totalAttempted++;
+            state.userAnswers.push({
+                question: q.question,
+                selected: q.options[selectedIndex],
+                correct: q.options[q.answer],
+                isCorrect: isCorrect,
+                detail: q.detail
+            });
+
+            // Get Ball starting position
+            const ballRect = ballElement.getBoundingClientRect();
+            const startX = ballRect.left + ballRect.width / 2;
+            const startY = ballRect.top + ballRect.height / 2;
+
+            // Get Hoop target position
+            const hoopRim = document.getElementById('basketRim');
+            const hoopRect = hoopRim.getBoundingClientRect();
+            const targetX = hoopRect.left + hoopRect.width / 2;
+            const targetY = hoopRect.top + hoopRect.height / 2;
+
+            // Hide actual ball element during flight
+            ballElement.style.visibility = 'hidden';
+
+            // Animated Flying Canvas Ball Object
+            const animBall = {
+                x: startX,
+                y: startY,
+                size: ballRect.width / 2,
+                progress: 0
+            };
+
+            const duration = 900; // ms
+            const startTime = performance.now();
+
+            function animateFlight(now) {
+                const elapsed = now - startTime;
+                let t = Math.min(1, elapsed / duration);
+
+                // Quadratic Bezier Arc Curve Calculation
+                const controlY = Math.min(startY, targetY) - 180; // High arc height
+                
+                // End target offset if incorrect (bounce off rim)
+                let currentTargetX = targetX;
+                let currentTargetY = targetY;
+                if (!isCorrect) {
+                    currentTargetX = targetX + (selectedIndex === 0 ? -60 : 60);
+                    currentTargetY = targetY - 20;
+                }
+
+                // Bezier formula: (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+                const u = 1 - t;
+                animBall.x = u * u * startX + 2 * u * t * ((startX + currentTargetX) / 2) + t * t * currentTargetX;
+                animBall.y = u * u * startY + 2 * u * t * controlY + t * t * currentTargetY;
+                
+                // Scale down ball to create depth distance effect
+                const currentScale = 1 - t * 0.35;
+                const currentRadius = animBall.size * currentScale;
+
+                // Draw Ball on Canvas Overlay
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(animBall.x, animBall.y, currentRadius, 0, Math.PI * 2);
+                ctx.fillStyle = "#ea580c";
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = "#451a03";
+                ctx.stroke();
+                ctx.restore();
+
+                if (t < 1) {
+                    requestAnimationFrame(animateFlight);
+                } else {
+                    // Flight Completed: Trigger Shot Result
+                    if (isCorrect) {
+                        audio.playSwish();
+                        audio.playCheer();
+                        basketNet.classList.add('swish-anim');
+                        setTimeout(() => basketNet.classList.remove('swish-anim'), 500);
+
+                        spawnParticles(targetX, targetY + 20, 40, '#f59e0b');
+                        spawnParticles(targetX, targetY + 20, 20, '#10b981');
+
+                        showToast("命中入网！+10分", true);
+                        state.score += 10;
+                        state.correctCount++;
+                    } else {
+                        audio.playRimHit();
+                        spawnParticles(currentTargetX, currentTargetY, 15, '#ef4444');
+                        showToast("可惜弹框了！下一题加油", false);
+                    }
+
+                    updateHUD();
+
+                    // Advance to next question after delay
+                    setTimeout(() => {
+                        state.currentIndex++;
+                        loadQuestion();
+                    }, 1400);
+                }
+            }
+
+            requestAnimationFrame(animateFlight);
+        }
+
+        /* Show Feedback Toast */
+        function showToast(msg, isSuccess) {
+            feedbackText.textContent = msg;
+            if (isSuccess) {
+                feedbackIcon.className = "fa-solid fa-circle-check text-emerald-400 text-lg";
+                feedbackToast.classList.remove('border-red-500/50');
+                feedbackToast.classList.add('border-emerald-500/50');
+            } else {
+                feedbackIcon.className = "fa-solid fa-circle-xmark text-red-400 text-lg";
+                feedbackToast.classList.remove('border-emerald-500/50');
+                feedbackToast.classList.add('border-red-500/50');
+            }
+            feedbackToast.classList.remove('opacity-0');
+            setTimeout(() => {
+                feedbackToast.classList.add('opacity-0');
+            }, 1200);
+        }
+
+        /* ===================================================================
+           5. FINAL RESULTS SUMMARY SCREEN
+           =================================================================== */
+        function showFinalResults() {
+            const finalScoreEl = document.getElementById('finalScore');
+            const finalCorrectEl = document.getElementById('finalCorrect');
+            const finalAccuracyEl = document.getElementById('finalAccuracy');
+            const resultTitle = document.getElementById('resultTitle');
+            const resultSubtitle = document.getElementById('resultSubtitle');
+            const badgeIcon = document.getElementById('badgeIcon');
+            const reviewList = document.getElementById('reviewList');
+
+            const acc = Math.round((state.correctCount / state.activeQuestions.length) * 100);
+
+            finalScoreEl.textContent = state.score;
+            finalCorrectEl.textContent = `${state.correctCount} / ${state.activeQuestions.length}`;
+            finalAccuracyEl.textContent = `${acc}%`;
+
+            if (acc === 100) {
+                resultTitle.textContent = "🏆 传奇 MVP 科学巨星！";
+                resultSubtitle.textContent = "完美百分百！你已彻底掌握一年级科学的所有知识点！";
+                badgeIcon.className = "w-20 h-20 rounded-full bg-gradient-to-tr from-yellow-400 to-amber-300 flex items-center justify-center text-slate-950 text-4xl shadow-lg shadow-yellow-500/50 mb-3";
+            } else if (acc >= 80) {
+                resultTitle.textContent = "🌟 全能神射手！";
+                resultSubtitle.textContent = "成绩非常优秀！继续保持对科学的好奇心吧！";
+                badgeIcon.className = "w-20 h-20 rounded-full bg-gradient-to-tr from-amber-500 to-orange-400 flex items-center justify-center text-slate-950 text-4xl shadow-lg shadow-amber-500/50 mb-3";
+            } else if (acc >= 60) {
+                resultTitle.textContent = "🏀 科学主力队员！";
+                resultSubtitle.textContent = "表现不错！仔细复习答错的题目，下次一定能更高分！";
+            } else {
+                resultTitle.textContent = "💪 潜力新秀球员！";
+                resultSubtitle.textContent = "科学知识还需要多加练习，再重新挑战一次吧！";
+            }
+
+            // Populate Review Breakdown List
+            reviewList.innerHTML = '';
+            state.userAnswers.forEach((ans, idx) => {
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-xl border ${ans.isCorrect ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-red-950/30 border-red-500/30'}`;
+                
+                item.innerHTML = `
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="font-bold text-slate-200">
+                            <span class="text-slate-400 font-normal">Q${idx + 1}.</span> ${ans.question}
+                        </div>
+                        <span class="${ans.isCorrect ? 'text-emerald-400' : 'text-red-400'} font-black text-xs shrink-0">
+                            ${ans.isCorrect ? '<i class="fa-solid fa-check"></i> 命中' : '<i class="fa-solid fa-xmark"></i> 未中'}
+                        </span>
+                    </div>
+                    <div class="mt-1 text-[11px] text-slate-300 flex flex-wrap gap-x-3">
+                        <span>你的选择: <strong class="${ans.isCorrect ? 'text-emerald-300' : 'text-red-300'}">${ans.selected}</strong></span>
+                        ${!ans.isCorrect ? `<span>正确答案: <strong class="text-emerald-400">${ans.correct}</strong></span>` : ''}
+                    </div>
+                    <div class="mt-1 text-[10px] text-amber-200/80 italic">💡 ${ans.detail}</div>
+                `;
+                reviewList.appendChild(item);
+            });
+
+            resultModal.classList.remove('hidden');
+        }
+
+        /* ===================================================================
+           6. EVENT LISTENERS
+           =================================================================== */
+        document.getElementById('startGameBtn').addEventListener('click', () => {
+            audio.init();
+            initGame();
+        });
+
+        document.getElementById('restartGameBtn').addEventListener('click', () => {
+            initGame();
+        });
+
+        const audioBtn = document.getElementById('audioBtn');
+        const audioIcon = document.getElementById('audioIcon');
+
+        audioBtn.addEventListener('click', () => {
+            audio.muted = !audio.muted;
+            if (audio.muted) {
+                audioIcon.className = "fa-solid fa-volume-xmark text-red-400";
+            } else {
+                audioIcon.className = "fa-solid fa-volume-high text-slate-300";
+                audio.init();
+            }
+        });
+    </script>
+</body>
+</html>
